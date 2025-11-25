@@ -136,6 +136,49 @@
       border-color: rgba(0, 212, 255, 0.5);
     }
 
+    .go-button {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 8px 16px;
+      background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+      z-index: 3;
+      animation: slideInRight 0.3s ease-out;
+    }
+
+    .go-button:hover {
+      background: linear-gradient(135deg, #00e5ff 0%, #00aaff 100%);
+      box-shadow: 0 6px 16px rgba(0, 212, 255, 0.6);
+      transform: translateY(-50%) scale(1.05);
+    }
+
+    .go-button:active {
+      transform: translateY(-50%) scale(0.98);
+    }
+
+    @keyframes slideInRight {
+      from {
+        opacity: 0;
+        transform: translateY(-50%) translateX(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0);
+      }
+    }
+
     .search-results {
       margin-top: 8px;
       max-height: 200px;
@@ -475,6 +518,12 @@
           </svg>
           <input type="text" class="search-input" placeholder="Search destination..." id="searchInput">
           
+          <!-- GO Button -->
+          <button class="go-button" id="goButton" style="display: none;">
+            <span style="font-size: 16px; font-weight: 800;">GO</span>
+            <span style="font-size: 18px;">🚀</span>
+          </button>
+          
           <!-- Search Results -->
           <div class="search-results" id="searchResults"></div>
         </div>
@@ -617,8 +666,13 @@
     }
 
     // Search for location using Nominatim (OpenStreetMap)
+    let selectedPlace = null;
+    
     async function searchLocation(query) {
-      if (!query || query.length < 3) return;
+      if (!query || query.length < 3) {
+        document.getElementById('goButton').style.display = 'none';
+        return;
+      }
 
       const loading = document.getElementById('loading');
       const searchResults = document.getElementById('searchResults');
@@ -652,26 +706,58 @@
             
             searchResults.appendChild(item);
           });
+          
+          // Auto-select first result for GO button
+          if (data.length > 0) {
+            selectedPlace = data[0];
+            document.getElementById('goButton').style.display = 'flex';
+          }
         } else {
           searchResults.innerHTML = '<div class="search-result-item"><div class="result-name">No results found</div></div>';
           searchResults.classList.add('active');
+          document.getElementById('goButton').style.display = 'none';
+          selectedPlace = null;
         }
       } catch (error) {
         loading.classList.remove('active');
         console.error('Search error:', error);
         alert('Error searching location. Please try again.');
+        document.getElementById('goButton').style.display = 'none';
+        selectedPlace = null;
       }
     }
 
     // Select destination and create route
     function selectDestination(place) {
+      selectedPlace = place;
       destinationLocation = [parseFloat(place.lat), parseFloat(place.lon)];
       
-      // Clear search results
+      // Clear search results but keep the selected place name
       document.getElementById('searchResults').classList.remove('active');
       document.getElementById('searchInput').value = place.display_name.split(',')[0];
       
-      // Show route
+      // Show GO button
+      document.getElementById('goButton').style.display = 'flex';
+    }
+    
+    // Start navigation when GO button is clicked
+    function startNavigation() {
+      if (!selectedPlace) {
+        alert('Please select a destination first.');
+        return;
+      }
+      
+      if (!destinationLocation) {
+        destinationLocation = [parseFloat(selectedPlace.lat), parseFloat(selectedPlace.lon)];
+      }
+      
+      // Hide GO button
+      document.getElementById('goButton').style.display = 'none';
+      
+      // Hide search results
+      document.getElementById('searchResults').classList.remove('active');
+      
+      // Create the route
       createRoute();
     }
 
@@ -789,7 +875,9 @@
       document.getElementById('routeInfo').classList.remove('active');
       document.getElementById('routeBtn').classList.remove('active');
       document.getElementById('searchInput').value = '';
+      document.getElementById('goButton').style.display = 'none';
       destinationLocation = null;
+      selectedPlace = null;
     }
 
     // Event Listeners
@@ -803,6 +891,20 @@
         searchTimeout = setTimeout(() => {
           searchLocation(e.target.value);
         }, 500);
+      });
+      
+      // Enter key to start navigation
+      document.getElementById('searchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && selectedPlace) {
+          startNavigation();
+        }
+      });
+      
+      // GO button click
+      document.getElementById('goButton').addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        startNavigation();
       });
 
       // Clear button
