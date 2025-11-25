@@ -1,0 +1,59 @@
+{
+  "name": "claude-view",
+  "version": "1.0.0",
+  "description": "A modern GPS navigation application with real-time police trap alerts, live weather updates, and an elegant Haiti flag-inspired design",
+  "main": "claude-view.jsx",
+  "keywords": [
+    "gps",
+    "navigation",
+    "maps",
+    "weather",
+    "police-alerts",
+    "react",
+    "geolocation",
+    "haiti",
+    "map-application",
+    "realtime",
+    "traffic"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/claude-view.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/claude-view/issues"
+  },
+  "homepage": "https://github.com/yourusername/claude-view#readme",
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "dependencies": {
+    "lucide-react": "^0.263.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

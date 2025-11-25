@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPS Navigator - Preview</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      overflow: hidden;
+    }
+
+    .container {
+      width: 100vw;
+      height: 100vh;
+      background: #0a0e27;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .map-background {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, #a8c5e8 0%, #a8c5e8 50%, #f4a5b5 50%, #f4a5b5 100%);
+      transition: background 0.5s ease;
+    }
+
+    .map-background.satellite {
+      background: linear-gradient(180deg, #8fb3db 0%, #8fb3db 50%, #f08fa3 50%, #f08fa3 100%);
+    }
+
+    .map-background.terrain {
+      background: linear-gradient(180deg, #b5d4f0 0%, #b5d4f0 50%, #f7b8c6 50%, #f7b8c6 100%);
+    }
+
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.4;
+    }
+
+    .weather-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(100, 149, 237, 0.15) 0%, transparent 50%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    .weather-overlay.active {
+      opacity: 1;
+    }
+
+    .rain-effect {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(transparent 0%, transparent 50%, rgba(100, 149, 237, 0.1) 50%, rgba(100, 149, 237, 0.1) 100%);
+      background-size: 2px 20px;
+      animation: rain 1s linear infinite;
+    }
+
+    .route-line {
+      position: absolute;
+      width: 300px;
+      height: 2px;
+      background: linear-gradient(90deg, #00d4ff 0%, #0099ff 100%);
+      top: 50%;
+      left: 50%;
+      transform-origin: left center;
+      transform: rotate(45deg);
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    .route-line.active {
+      opacity: 1;
+    }
+
+    .user-marker {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+    }
+
+    .user-marker-inner {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
+      border-radius: 50%;
+      border: 4px solid white;
+      box-shadow: 0 4px 16px rgba(0, 153, 255, 0.5), 0 0 0 8px rgba(0, 212, 255, 0.2);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .user-marker-ripple {
+      position: absolute;
+      inset: -16px;
+      border-radius: 50%;
+      border: 2px solid rgba(0, 212, 255, 0.3);
+      animation: ripple 2s ease-out infinite;
+    }
+
+    .destination-marker {
+      position: absolute;
+      left: 65%;
+      top: 35%;
+      transform: translate(-50%, -100%);
+      z-index: 19;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    .destination-marker.active {
+      opacity: 1;
+      animation: bounce 1s ease-in-out infinite;
+    }
+
+    .destination-icon {
+      width: 40px;
+      height: 40px;
+      fill: #ff4757;
+      filter: drop-shadow(0 4px 12px rgba(255, 71, 87, 0.5));
+    }
+
+    .destination-label {
+      margin-top: 8px;
+      padding: 6px 12px;
+      background: rgba(10, 14, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 8px;
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .police-trap {
+      position: absolute;
+      z-index: 18;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    .police-trap.active {
+      opacity: 1;
+    }
+
+    .police-trap:nth-child(1) { left: 40%; top: 30%; }
+    .police-trap:nth-child(2) { left: 60%; top: 60%; }
+    .police-trap:nth-child(3) { left: 30%; top: 70%; }
+
+    .police-trap-icon {
+      padding: 8px;
+      background: rgba(255, 193, 7, 0.9);
+      border-radius: 12px;
+      border: 2px solid #ffc107;
+      box-shadow: 0 4px 16px rgba(255, 193, 7, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .police-trap.nearby .police-trap-icon {
+      background: linear-gradient(135deg, rgba(255, 71, 87, 0.95) 0%, rgba(255, 107, 107, 0.95) 100%);
+      border-color: #ff4757;
+      box-shadow: 0 4px 16px rgba(255, 71, 87, 0.6), 0 0 0 4px rgba(255, 71, 87, 0.2);
+      animation: alertPulse 1s ease-in-out infinite;
+    }
+
+    .police-trap-label {
+      margin-top: 6px;
+      padding: 4px 8px;
+      background: rgba(10, 14, 39, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 6px;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+    }
+
+    .control-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 360px;
+      max-height: calc(100vh - 40px);
+      background: rgba(10, 14, 39, 0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      overflow-y: auto;
+      z-index: 30;
+      animation: slideInLeft 0.4s ease-out;
+      transition: transform 0.3s;
+    }
+
+    .control-panel.hidden {
+      transform: translateX(-400px);
+    }
+
+    .panel-header {
+      padding: 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(0, 153, 255, 0.1) 100%);
+    }
+
+    .panel-title {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .panel-subtitle {
+      margin: 0;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 500;
+    }
+
+    .panel-content {
+      padding: 20px;
+    }
+
+    .search-container {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: rgba(255, 255, 255, 0.4);
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 14px 14px 14px 48px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      outline: none;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .search-input:focus {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(0, 212, 255, 0.5);
+    }
+
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .action-btn {
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+    }
+
+    .action-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .action-btn.active {
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(0, 153, 255, 0.2) 100%);
+      border-color: rgba(0, 212, 255, 0.4);
+      color: #00d4ff;
+    }
+
+    .info-card {
+      padding: 16px;
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(0, 153, 255, 0.1) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      margin-bottom: 20px;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    .info-card.active {
+      opacity: 1;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-label {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .info-value {
+      color: #00d4ff;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .weather-section {
+      margin-bottom: 20px;
+    }
+
+    .weather-toggle {
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+    }
+
+    .weather-toggle:hover {
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .weather-toggle.active {
+      background: linear-gradient(135deg, rgba(100, 149, 237, 0.2) 0%, rgba(135, 206, 235, 0.2) 100%);
+      border-color: rgba(100, 149, 237, 0.4);
+      color: #6495ed;
+    }
+
+    .weather-content {
+      margin-top: 12px;
+      padding: 16px;
+      background: linear-gradient(135deg, rgba(100, 149, 237, 0.15) 0%, rgba(135, 206, 235, 0.15) 100%);
+      border-radius: 12px;
+      border: 1px solid rgba(100, 149, 237, 0.3);
+      display: none;
+      animation: slideDown 0.3s ease-out;
+    }
+
+    .weather-content.active {
+      display: block;
+    }
+
+    .weather-main {
+      text-align: center;
+      margin-bottom: 16px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+    }
+
+    .weather-icon {
+      font-size: 48px;
+      margin-bottom: 8px;
+    }
+
+    .weather-temp {
+      font-size: 42px;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 4px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .weather-desc {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 600;
+    }
+
+    .weather-feels {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 4px;
+    }
+
+    .weather-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .weather-item {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .weather-item-label {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .weather-item-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .map-controls {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 30;
+    }
+
+    .weather-widget {
+      width: 200px;
+      padding: 16px;
+      background: rgba(10, 14, 39, 0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      border: 1px solid rgba(100, 149, 237, 0.3);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      animation: slideInRight 0.4s ease-out;
+      display: none;
+    }
+
+    .weather-widget.active {
+      display: block;
+    }
+
+    .weather-widget-temp {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .weather-widget-temp-value {
+      font-size: 36px;
+      font-weight: 800;
+      color: white;
+    }
+
+    .weather-widget-icon {
+      font-size: 32px;
+    }
+
+    .weather-widget-desc {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .weather-widget-details {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .weather-widget-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .weather-widget-row span:last-child {
+      font-weight: 600;
+      color: white;
+    }
+
+    .map-type-btn {
+      width: 56px;
+      height: 56px;
+      background: rgba(10, 14, 39, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      color: rgba(255, 255, 255, 0.7);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .map-type-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .map-type-btn.active {
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(0, 153, 255, 0.2) 100%);
+      border-color: rgba(0, 212, 255, 0.5);
+      color: #00d4ff;
+    }
+
+    .compass {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 100px;
+      background: rgba(10, 14, 39, 0.95);
+      backdrop-filter: blur(20px);
+      border-radius: 50%;
+      border: 2px solid rgba(0, 212, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      z-index: 30;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    .compass.active {
+      opacity: 1;
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    .compass-icon {
+      width: 48px;
+      height: 48px;
+      fill: #00d4ff;
+      filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.6));
+      transition: transform 0.5s ease-out;
+    }
+
+    .zoom-controls {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 30;
+    }
+
+    .zoom-btn {
+      width: 56px;
+      height: 56px;
+      background: rgba(10, 14, 39, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      font-family: inherit;
+    }
+
+    .zoom-btn:hover {
+      background: rgba(0, 212, 255, 0.2);
+      border-color: rgba(0, 212, 255, 0.5);
+      transform: scale(1.05);
+    }
+
+    .panel-toggle {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 56px;
+      height: 56px;
+      background: rgba(10, 14, 39, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      color: white;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      z-index: 31;
+    }
+
+    .panel-toggle.shifted {
+      left: 400px;
+    }
+
+    .panel-toggle:hover {
+      background: rgba(0, 212, 255, 0.2);
+      border-color: rgba(0, 212, 255, 0.5);
+    }
+
+    .alert-notification {
+      position: absolute;
+      top: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 400px;
+      max-width: 500px;
+      background: linear-gradient(135deg, rgba(255, 71, 87, 0.98) 0%, rgba(255, 107, 107, 0.98) 100%);
+      backdrop-filter: blur(20px);
+      borderRadius: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 20px 60px rgba(255, 71, 87, 0.6), 0 0 0 4px rgba(255, 71, 87, 0.2);
+      z-index: 50;
+      overflow: hidden;
+      display: none;
+      animation: alertSlideDown 0.5s ease-out, alertPulse 1s ease-in-out infinite;
+    }
+
+    .alert-notification.active {
+      display: block;
+    }
+
+    .alert-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .alert-icon-box {
+      width: 48px;
+      height: 48px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: bounce 1s ease-in-out infinite;
+    }
+
+    .alert-text {
+      flex: 1;
+    }
+
+    .alert-title {
+      margin: 0 0 4px 0;
+      font-size: 20px;
+      font-weight: 800;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .alert-subtitle {
+      margin: 0;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+    }
+
+    .alert-body {
+      padding: 24px;
+    }
+
+    .alert-details {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .alert-detail {
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .alert-detail-value {
+      font-size: 32px;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 4px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .alert-detail-label {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.9);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.9; }
+    }
+
+    @keyframes ripple {
+      0% { transform: scale(1); opacity: 0.4; }
+      100% { transform: scale(2); opacity: 0; }
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translate(-50%, -100%) translateY(0); }
+      50% { transform: translate(-50%, -100%) translateY(-10px); }
+    }
+
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(-30px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(30px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-50%) scale(0.9); }
+      to { opacity: 1; transform: translateX(-50%) scale(1); }
+    }
+
+    @keyframes alertPulse {
+      0%, 100% { box-shadow: 0 20px 60px rgba(255, 71, 87, 0.6), 0 0 0 4px rgba(255, 71, 87, 0.2); }
+      50% { box-shadow: 0 20px 60px rgba(255, 71, 87, 0.8), 0 0 0 8px rgba(255, 71, 87, 0.4); }
+    }
+
+    @keyframes alertSlideDown {
+      from { opacity: 0; transform: translateX(-50%) translateY(-30px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes rain {
+      from { background-position: 0 0; }
+      to { background-position: 0 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Map Background -->
+    <div class="map-background" id="mapBackground">
+      <div class="weather-overlay" id="weatherOverlay">
+        <div class="rain-effect"></div>
+      </div>
+      <div class="grid-overlay"></div>
+      
+      <!-- Route Line -->
+      <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;">
+        <line id="routeLine" x1="50%" y1="50%" x2="65%" y2="35%" stroke="url(#routeGradient)" stroke-width="4" stroke-dasharray="10,5" style="opacity: 0; transition: opacity 0.5s;" />
+        <defs>
+          <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00d4ff" stop-opacity="0.8" />
+            <stop offset="100%" stop-color="#0099ff" stop-opacity="0.8" />
+          </linearGradient>
+        </defs>
+      </svg>
+      
+      <!-- User Location Marker -->
+      <div class="user-marker">
+        <div class="user-marker-inner">
+          <div class="user-marker-ripple"></div>
+        </div>
+      </div>
+      
+      <!-- Destination Marker -->
+      <div class="destination-marker" id="destinationMarker">
+        <svg class="destination-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/>
+        </svg>
+        <div class="destination-label">Downtown</div>
+      </div>
+      
+      <!-- Police Traps -->
+      <div class="police-trap">
+        <div class="police-trap-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="police-trap-label">
+          2.1 km
+          <div style="font-size: 9px; opacity: 0.7; margin-top: 2px;">25 reports</div>
+        </div>
+      </div>
+      
+      <div class="police-trap nearby">
+        <div class="police-trap-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="police-trap-label">
+          1.8 km
+          <div style="font-size: 9px; opacity: 0.7; margin-top: 2px;">42 reports</div>
+        </div>
+      </div>
+      
+      <div class="police-trap">
+        <div class="police-trap-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="police-trap-label">
+          3.5 km
+          <div style="font-size: 9px; opacity: 0.7; margin-top: 2px;">18 reports</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="control-panel" id="controlPanel">
+      <div class="panel-header">
+        <h1 class="panel-title">GPS Navigator</h1>
+        <p class="panel-subtitle">Explore & Navigate</p>
+      </div>
+      
+      <div class="panel-content">
+        <!-- Search Bar -->
+        <div class="search-container">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.35-4.35"></path>
+          </svg>
+          <input type="text" class="search-input" placeholder="Search for places..." id="searchInput">
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+          <button class="action-btn active" id="trackBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+            </svg>
+            Track
+          </button>
+          <button class="action-btn" id="routeBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="6" cy="19" r="3"></circle>
+              <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"></path>
+            </svg>
+            Route
+          </button>
+          <button class="action-btn active" id="alertsBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            Alerts
+          </button>
+          <button class="action-btn" id="saveBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            Save
+          </button>
+        </div>
+        
+        <!-- Route Info -->
+        <div class="info-card" id="routeInfo">
+          <div class="info-row">
+            <span class="info-label">Distance</span>
+            <span class="info-value">5.2 km</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Bearing</span>
+            <span class="info-value">45°</span>
+          </div>
+        </div>
+        
+        <!-- Weather Section -->
+        <div class="weather-section">
+          <button class="weather-toggle" id="weatherToggle">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path>
+              </svg>
+              <span>Weather Updates</span>
+            </div>
+            <span style="font-size: 18px;">⛅</span>
+          </button>
+          
+          <div class="weather-content" id="weatherContent">
+            <div class="weather-main">
+              <div class="weather-icon">⛅</div>
+              <div class="weather-temp">75°F</div>
+              <div class="weather-desc">Partly Cloudy</div>
+              <div class="weather-feels">Feels like 78°F</div>
+            </div>
+            
+            <div class="weather-grid">
+              <div class="weather-item">
+                <div class="weather-item-label">💧 Humidity</div>
+                <div class="weather-item-value">65%</div>
+              </div>
+              <div class="weather-item">
+                <div class="weather-item-label">💨 Wind</div>
+                <div class="weather-item-value">8 mph</div>
+              </div>
+              <div class="weather-item">
+                <div class="weather-item-label">🌧️ Precipitation</div>
+                <div class="weather-item-value">0 mm</div>
+              </div>
+              <div class="weather-item">
+                <div class="weather-item-label">🧭 Direction</div>
+                <div class="weather-item-value">180°</div>
+              </div>
+            </div>
+            
+            <button style="width: 100%; margin-top: 12px; padding: 10px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; color: rgba(255, 255, 255, 0.9); font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;">
+              🔄 Refresh Weather
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Controls -->
+    <div class="map-controls">
+      <!-- Weather Widget -->
+      <div class="weather-widget" id="weatherWidget">
+        <div class="weather-widget-temp">
+          <div class="weather-widget-temp-value">75°</div>
+          <div class="weather-widget-icon">⛅</div>
+        </div>
+        <div class="weather-widget-desc">Partly Cloudy</div>
+        <div class="weather-widget-details">
+          <div class="weather-widget-row">
+            <span>💧 Humidity</span>
+            <span>65%</span>
+          </div>
+          <div class="weather-widget-row">
+            <span>💨 Wind</span>
+            <span>8 mph</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Map Type Buttons -->
+      <button class="map-type-btn active" id="standardBtn" title="Standard">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+        </svg>
+      </button>
+      <button class="map-type-btn" id="satelliteBtn" title="Satellite">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+        </svg>
+      </button>
+      <button class="map-type-btn" id="terrainBtn" title="Terrain">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Compass -->
+    <div class="compass" id="compass">
+      <svg class="compass-icon" viewBox="0 0 24 24" fill="currentColor">
+        <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+      </svg>
+    </div>
+
+    <!-- Zoom Controls -->
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="zoomIn">+</button>
+      <button class="zoom-btn" id="zoomOut">−</button>
+    </div>
+
+    <!-- Panel Toggle -->
+    <button class="panel-toggle shifted" id="panelToggle">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+
+    <!-- Alert Notification -->
+    <div class="alert-notification" id="alertNotification">
+      <div class="alert-header">
+        <div class="alert-icon-box">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </div>
+        <div class="alert-text">
+          <h3 class="alert-title">⚠️ POLICE TRAP AHEAD</h3>
+          <p class="alert-subtitle">Slow down and drive safely</p>
+        </div>
+      </div>
+      <div class="alert-body">
+        <div class="alert-details">
+          <div class="alert-detail">
+            <div class="alert-detail-value">1.8 km</div>
+            <div class="alert-detail-label">Distance Ahead</div>
+          </div>
+          <div class="alert-detail">
+            <div class="alert-detail-value">⚡</div>
+            <div class="alert-detail-label">Speed Trap</div>
+          </div>
+        </div>
+        <div style="padding: 12px 16px; background: rgba(255, 255, 255, 0.2); border-radius: 10px; font-size: 13px; color: rgba(255, 255, 255, 0.95); font-weight: 600; text-align: center;">
+          📊 Reported by 42 drivers
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Interactive elements
+    const routeBtn = document.getElementById('routeBtn');
+    const routeInfo = document.getElementById('routeInfo');
+    const destinationMarker = document.getElementById('destinationMarker');
+    const routeLine = document.getElementById('routeLine');
+    const compass = document.getElementById('compass');
+    const weatherToggle = document.getElementById('weatherToggle');
+    const weatherContent = document.getElementById('weatherContent');
+    const weatherWidget = document.getElementById('weatherWidget');
+    const weatherOverlay = document.getElementById('weatherOverlay');
+    const panelToggle = document.getElementById('panelToggle');
+    const controlPanel = document.getElementById('controlPanel');
+    const mapBackground = document.getElementById('mapBackground');
+    const standardBtn = document.getElementById('standardBtn');
+    const satelliteBtn = document.getElementById('satelliteBtn');
+    const terrainBtn = document.getElementById('terrainBtn');
+    const alertNotification = document.getElementById('alertNotification');
+    const policeTraps = document.querySelectorAll('.police-trap');
+
+    let routeActive = false;
+    let weatherActive = false;
+    let panelVisible = true;
+
+    // Route toggle
+    routeBtn.addEventListener('click', () => {
+      routeActive = !routeActive;
+      routeBtn.classList.toggle('active');
+      routeInfo.classList.toggle('active');
+      destinationMarker.classList.toggle('active');
+      routeLine.style.opacity = routeActive ? '1' : '0';
+      compass.classList.toggle('active');
+    });
+
+    // Weather toggle
+    weatherToggle.addEventListener('click', () => {
+      weatherActive = !weatherActive;
+      weatherToggle.classList.toggle('active');
+      weatherContent.classList.toggle('active');
+      weatherWidget.classList.toggle('active');
+      weatherOverlay.classList.toggle('active');
+    });
+
+    // Panel toggle
+    panelToggle.addEventListener('click', () => {
+      panelVisible = !panelVisible;
+      controlPanel.classList.toggle('hidden');
+      panelToggle.classList.toggle('shifted');
+      panelToggle.querySelector('svg').innerHTML = panelVisible 
+        ? '<polyline points="15 18 9 12 15 6"></polyline>'
+        : '<polyline points="9 18 15 12 9 6"></polyline>';
+    });
+
+    // Map type switching
+    const mapTypes = [
+      { btn: standardBtn, class: '' },
+      { btn: satelliteBtn, class: 'satellite' },
+      { btn: terrainBtn, class: 'terrain' }
+    ];
+
+    mapTypes.forEach(({ btn, class: className }) => {
+      btn.addEventListener('click', () => {
+        mapTypes.forEach(t => t.btn.classList.remove('active'));
+        btn.classList.add('active');
+        mapBackground.className = 'map-background ' + className;
+      });
+    });
+
+    // Show alert after 2 seconds
+    setTimeout(() => {
+      alertNotification.classList.add('active');
+      policeTraps.forEach(trap => trap.classList.add('active'));
+      
+      // Auto hide after 8 seconds
+      setTimeout(() => {
+        alertNotification.classList.remove('active');
+      }, 8000);
+    }, 2000);
+
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && e.target.value) {
+        routeActive = true;
+        routeBtn.classList.add('active');
+        routeInfo.classList.add('active');
+        destinationMarker.classList.add('active');
+        routeLine.style.opacity = '1';
+        compass.classList.add('active');
+      }
+    });
+  </script>
+</body>
+</html>
